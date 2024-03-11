@@ -1,0 +1,78 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+v.Local.sSQL.Declare(string)
+v.Local.iCount.Declare(long)
+v.Local.iRow.Declare(long)
+v.Local.sLine.Declare(string)
+V.Local.sSeq.Declare(string)
+
+f.ODBC.Connection!Con.OpenConnection(v.Ambient.PDSN,v.Ambient.PUser,v.Ambient.PPass)
+
+f.Intrinsic.Control.SelectCase(v.Caller.Hook)
+
+	'Hook 15850 Script 1 Update Single Job
+	f.Intrinsic.Control.Case(15850)
+		'We are going to pass the good pieces into the good field and bad into the scrap field
+		f.Intrinsic.String.LPad(v.Passed.000005,"0",6,v.Local.sSeq)
+		f.Intrinsic.String.Build("SELECT ISNULL(GOOD_PIECES,0) AS GOOD_PIECES, ISNULL(BAD_PIECES,0) AS BAD_PIECES, ISNULL(REASON,'') AS REASON FROM GCG_4258_S_TO_GSS WHERE rtrim(JOB)+'-'+rtrim(ISNULL(SUFFIX,'')) = '{0}' AND SEQUENCE = '{1}' AND MACHINE = '{2}' ",v.Passed.000004.Trim,v.Local.sSeq,V.Passed.000010.Left4,V.Local.sSQL)
+		f.ODBC.Connection!Con.OpenLocalRecordsetRO("rst",v.Local.sSQL)
+		f.Intrinsic.Control.If(v.ODBC.con!rst.EOF,=,False)
+			'good pieces
+			v.Passed.000001.Set(v.ODBC.con!rst.FieldValFloat!GOOD_PIECES)
+			'bad pieces
+			v.Passed.000002.Set(v.ODBC.con!rst.FieldValFloat!BAD_PIECES)
+		f.Intrinsic.Control.EndIf
+		f.ODBC.Con!rst.Close
+		
+	'Hook 15840 Populate
+	f.Intrinsic.Control.Case(15840)
+		'We need to change the script 1 button text
+		v.Passed.000048.Set("SN Pieces")
+		
+f.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_Labor_GUI.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.SetErrorHandler("Unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+f.ODBC.Connection!Con.Close
+f.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_Labor_GUI.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Unload.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$SS1$}$11/1/2016 8:30:09 AM$}$False
+${$3$}$0$}$$}$-1$}$-1$}$$}$1/1/1900$}$SN90 transaction loads GSS Inventory into Sigma Nest
+Program.Sub.Comments.End
