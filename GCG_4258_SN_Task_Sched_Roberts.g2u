@@ -1,0 +1,373 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+'modified by Trey S
+'December 6th, 2019
+'Making flex schedule generation optional
+
+'modified by Trey S March 12th 2021
+'modifying to be used from post OLU hook 38130 instead of task scheduler
+
+V.Local.sError.Declare(String)
+V.Local.iPid.Declare(Long)
+V.Local.sPrgm.Declare(String)
+V.Local.fTimerS.Declare(Float)
+V.Local.fTimerN.Declare(Float)
+V.Local.dCurrentTime.Declare(Date)
+V.Local.iHour.Declare(Long)
+V.Local.dNextTime.Declare(Date)
+V.Local.sOpenTask.Declare(String)
+V.Local.bFound.Declare(Boolean)
+v.Local.sRet.Declare(String)
+v.Local.sFileName.Declare(String)
+v.Local.bExist.Declare(Boolean)
+v.Local.sLogFile.Declare(String)
+v.Local.sLog.Declare(String)
+V.Local.sSettingsFile.Declare(String)
+V.Local.sContents.Declare(String)
+V.Local.dDate.Declare(Date)
+V.Local.dTime.Declare(Date)
+V.Local.iRet.Declare(Long)
+V.Local.dDefault.Declare(Date)
+V.Local.sDate.Declare(String)
+V.Local.bIsDate.Declare(Boolean)
+
+'make sure we aren't already running
+F.Intrinsic.Control.CallSub(ScriptPIDCheck, "Project", "4258", "Task", "GCG_4258_SN_Task_Sched_Roberts")
+
+'check if it's been 5 minutes since last run
+F.Global.Registry.ReadValue(V.Caller.User, V.Caller.CompanyCode, "GCG_4258_SN_Task_Sched_Roberts.g2u", 4258, 0, 5, V.Ambient.MinDate, V.Local.sDate)
+F.Intrinsic.Date.IsDate(V.Local.sDate, V.Local.bIsDate)
+F.Intrinsic.Control.If(V.Local.bIsDate.Not)
+	V.Local.sDate.Set(V.Ambient.MinDate)
+F.Intrinsic.Control.EndIf
+V.Local.dDate.Set(V.Local.sDate)
+
+F.Intrinsic.Date.DateDiff("N", V.Local.dDate, V.Ambient.Now, V.Local.iRet)
+F.Intrinsic.Control.If(V.Local.iRet, <, 10)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'f.Intrinsic.String.Build("{0}\GSSSNLOG.txt",v.Caller.FilesDir,v.Local.sLogFile)
+f.Intrinsic.String.Build("{0}\Custom\4258\Log\GCG_4258_SN_Task_Sched_Roberts_Log.txt",v.Caller.GlobalDir,v.Local.sLogFile)
+f.Intrinsic.File.Exists(v.Local.sLogFile,v.Local.bExist)
+f.Intrinsic.Control.If(v.Local.bExist,=,False)
+	f.Intrinsic.File.String2File(v.Local.sLogFile,"")
+f.Intrinsic.Control.EndIf
+f.Intrinsic.String.Build("{0}: Starting Task Scheduler",v.Ambient.now,v.Local.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+
+f.Intrinsic.String.Build("{0}\SNTask.txt",v.Caller.FilesDir,v.Local.sFileName)
+f.Intrinsic.File.Exists(v.Local.sFileName,v.Local.bExist)
+f.Intrinsic.Control.If(v.Local.bExist,=,True)
+	'The file exists so lets make sure it is empty
+	f.Intrinsic.File.File2String(v.Local.sFileName,v.Local.sRet)
+	f.Intrinsic.Control.If(v.Local.sRet,<>,"")
+		'pid already in there so lets kill it and add ours
+		f.Intrinsic.Task.PIDRunning(v.Local.sRet,v.Local.bExist)
+		f.Intrinsic.Control.If(v.Local.bExist,=,True)
+			f.Intrinsic.String.Build("{0}: Termite PID {1}",v.Ambient.now,v.Local.sRet,v.Local.sLog)
+			f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+			f.Intrinsic.Task.TerminatePID(v.Local.sRet)
+		f.Intrinsic.Control.EndIf
+		f.Intrinsic.String.Build("{0}: Add our PID {1}",v.Ambient.now,v.Ambient.PID,v.Local.sLog)
+		f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+		f.Intrinsic.File.String2File(v.Local.sFileName,v.Ambient.PID)
+	f.Intrinsic.Control.Else
+		'no pid in there so add ours
+		f.Intrinsic.String.Build("{0}: Add our PID {1}",v.Ambient.now,v.Ambient.PID,v.Local.sLog)
+		f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+		f.Intrinsic.File.String2File(v.Local.sFileName,v.Ambient.PID)
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.Else
+	'File doesn't exist so we need to save or PID
+	f.Intrinsic.String.Build("{0}: Add our PID {1}",v.Ambient.now,v.Ambient.PID,v.Local.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+	f.Intrinsic.File.String2File(v.Local.sFileName,v.Ambient.PID)
+f.Intrinsic.Control.EndIf
+
+'check time since material export
+F.Global.Registry.ReadValue(V.Caller.User, V.Caller.CompanyCode, "GCG_4258_SN_Task_Sched_Roberts.g2u", 4258, 1, 5, V.Ambient.MinDate, V.Local.sDate)
+F.Intrinsic.Date.IsDate(V.Local.sDate, V.Local.bIsDate)
+F.Intrinsic.Control.If(V.Local.bIsDate.Not)
+	V.Local.sDate.Set(V.Ambient.MinDate)
+F.Intrinsic.Control.EndIf
+V.Local.dDate.Set(V.Local.sDate)
+
+'make sure it's been 30 minutes
+F.Intrinsic.Date.DateDiff("N", V.Local.dDate, V.Ambient.Now, V.Local.iRet)
+F.Intrinsic.Control.If(V.Local.iRet, >=, 30)
+	f.Intrinsic.String.Build("{0}: Running SN90",v.Ambient.now,v.Local.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+	F.Intrinsic.String.Concat(V.Caller.PluginsDir,"\GAB\GAS\GCG_4258_SN90_ByPl_Roberts.g2u",V.Local.sPrgm)
+	F.Global.General.CallSyncGAS(V.Local.sPrgm)
+	F.Global.Registry.AddValue(V.Caller.User, V.Caller.CompanyCode, "GCG_4258_SN_Task_Sched_Roberts.g2u", 4258, 1, False, V.Ambient.Now, False, 0, 0, V.Ambient.Date, V.Ambient.Time)
+F.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("{0}: Running GSS to SN",v.Ambient.now,v.Local.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+F.Intrinsic.String.Concat(V.Caller.PluginsDir,"\GAB\GAS\GCG_4258_GSS_To_SigmaNest_Roberts.g2u",V.Local.sPrgm)
+F.Global.General.CallSyncGAS(V.Local.sPrgm)
+
+F.Intrinsic.Control.CallSub(GetFlexScheduleOption)
+F.Intrinsic.Control.If(V.Args.Generate_Flex_Schedule)
+	f.Intrinsic.String.Build("{0}: Running SN to GSS Flex Sched",v.Ambient.now,v.Local.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+	F.Intrinsic.String.Concat(V.Caller.PluginsDir,"\GAB\GAS\GCG_4258_SigmaNest_To_GSS_Roberts_Flex.g2u",V.Local.sPrgm)
+	F.Global.General.CallSyncGAS(V.Local.sPrgm)
+F.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("{0}: Running SN to GSS",v.Ambient.now,v.Local.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+F.Intrinsic.String.Concat(V.Caller.PluginsDir,"\GAB\GAS\GCG_4258_SigmaNest_To_GSS_Roberts.g2u",V.Local.sPrgm)
+F.Global.General.CallSyncGAS(V.Local.sPrgm)
+
+f.Intrinsic.String.Build("{0}: Running SN to GSS Rem",v.Ambient.now,v.Local.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+F.Intrinsic.String.Concat(V.Caller.PluginsDir,"\GAB\GAS\GCG_4258_SigmaNest_Rem_Roberts.g2u",V.Local.sPrgm)
+F.Global.General.CallSyncGAS(V.Local.sPrgm)
+
+'save our timestamp to the database
+F.Global.Registry.AddValue(V.Caller.User, V.Caller.CompanyCode, "GCG_4258_SN_Task_Sched_Roberts.g2u", 4258, 0, False, V.Ambient.Now, False, 0, 0, V.Ambient.Date, V.Ambient.Time, "")
+F.Intrinsic.Control.CallSub(ScriptPIDClear, "Project", "4258", "Task", "GCG_4258_SN_Task_Sched_Roberts")
+
+'' get difference in time between now and 11:58
+'F.Intrinsic.Date.ConvertTString("2358","HHNN",V.Local.dNextTime)
+'F.Intrinsic.Date.DateDiff("N",V.Ambient.Time,V.Local.dNextTime,V.Local.iHour)
+
+'' if within 5 minuntes of 11:58 pm, go ahead and end for the day.
+'f.Intrinsic.String.Build("{0}: Check Time Minutes = {1}",v.Ambient.now,v.Local.iHour,v.Local.sLog)
+'f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+'F.Intrinsic.Control.If(V.Local.iHour,<=,15)
+'	f.Intrinsic.String.Build("{0}: Closing Task Schedule Program",v.Ambient.now,v.Local.sLog)
+'	f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+'	f.Intrinsic.File.String2File(v.Local.sFileName,"")
+'	F.Intrinsic.Control.End
+'F.Intrinsic.Control.EndIf
+
+'' ater complete, start the Timer
+'' get the current time and add 5 minutes (300 seconds)
+''F.Intrinsic.UI.Timer(V.Local.fTimerS)
+''F.Intrinsic.Math.Add(V.Local.fTimerS,900,V.Local.fTimerS)
+'v.Local.dCurrentTime.Set(v.Ambient.Now)
+'f.Intrinsic.Date.DateAdd("N",5,v.Local.dCurrentTime,v.Local.dCurrentTime)
+
+''F.Intrinsic.Control.Dountil(V.Local.fTimerN,>=,V.Local.fTimerS)
+'f.Intrinsic.String.Build("{0}: Sleeping for 300 Seconds",v.Ambient.now,v.Local.sLog)
+'f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+'f.Intrinsic.Control.DoUntil(v.Ambient.Now,>=,v.Local.dCurrentTime)
+'	' get the current time
+''	F.Intrinsic.UI.Timer(V.Local.fTimerN)
+'	F.Intrinsic.UI.Sleep(300)
+'F.Intrinsic.Control.Loop
+
+'f.Intrinsic.String.Build("{0}: Running Task Scheduler again",v.Ambient.now,v.Local.sLog)
+'f.Intrinsic.File.Append2FileNewLine(v.Local.sLogFile,v.Local.sLog)
+'F.Intrinsic.String.Build("{0}\GAB\GAS\GCG_4258_SN_Task_Sched_Roberts.g2u",V.Caller.PluginsDir,V.Local.sOpenTask)
+'F.Intrinsic.File.Exists(V.Local.sOpenTask,V.Local.bFound)
+'F.Intrinsic.Control.If(V.Local.bFound,=,True)
+'	f.Intrinsic.File.String2File(v.Local.sFileName,"")
+'	F.Global.General.CallAsyncGAS(V.Local.sOpenTask,V.Local.iPID)
+'F.Intrinsic.Control.EndIf
+
+'F.Intrinsic.Control.End
+
+'F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SN_Task_Sched_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	f.Intrinsic.File.String2File(v.Local.sFileName,"")
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.Licenseverification.Start
+F.Intrinsic.Control.SetErrorHandler("Licenseverification_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.bLicensed.Declare(Boolean)
+
+' if license is not found, the script will end
+f.Global.General.IsLicensedByModuleName("NES",v.Local.bLicensed)
+F.Intrinsic.Control.If(V.Local.bLicensed,=,False)
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Licenseverification_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SN_Task_Sched_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+Program.Sub.Licenseverification.End
+
+Program.Sub.GetFlexScheduleOption.Start
+F.Intrinsic.Control.Try
+
+V.Local.bFlex.Declare(Boolean, True)
+V.Local.sContents.Declare(String)
+V.Local.sSettingsFile.Declare(String)
+V.Local.bExists.Declare(Boolean, False)
+V.Local.sError.Declare(String)
+
+'check if flex schedule option is on
+F.Intrinsic.String.Build("{0}\Custom\4258\Settings\IMPORT_SETTINGS.dat", V.Caller.GlobalDir, V.Local.sSettingsFile)
+F.Intrinsic.File.Exists(V.Local.sSettingsFile, V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	F.Intrinsic.File.File2String(V.Local.sSettingsFile, V.Local.sContents)
+	F.Intrinsic.String.Split(V.Local.sContents, "!@#$%$#@!", V.Local.sContents)
+	V.Local.bFlex.Set(V.Local.sContents(1))
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Variable.AddRV("GENERATE_FLEX_SCHEDULE", V.Local.bFlex)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.GetFlexScheduleOption.End
+
+Program.Sub.ScriptPIDCheck.Start
+'check if the process is already running
+'store PID in a text file
+'Pass folder to store in 	- PROJECT
+'what to name file			- TASK
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String)
+
+V.Local.bExists.Declare(Boolean)
+V.Local.sDir.Declare(String)
+V.Local.sCurrentPIDProcess.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.sProject.Declare(String)
+V.Local.sTask.Declare(String)
+V.Local.bRunning.Declare(Boolean, False)
+V.Local.bPIDRunning.Declare(Boolean, False)
+V.Local.sContents.Declare(String)
+
+V.Local.sProject.Set(V.Args.Project)
+V.Local.sTask.Set(V.Args.Task)
+
+'check if running file exists
+F.Intrinsic.String.Build("{0}\Custom\{1}\{2}\IS_RUNNING\{3}_Running.dat", V.Caller.GlobalDir, V.Local.sProject, V.Caller.CompanyCode, V.Local.sTask, V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile, V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	'check if file / PID is valid
+	F.Intrinsic.File.File2String(V.Local.sFile, V.Local.sContents)
+	F.Intrinsic.String.Split(V.Local.sContents, V.Ambient.NewLine, V.Local.sContents)
+	F.Intrinsic.String.Replace(V.Local.sContents(0), "PID: ", "", V.Local.sCurrentPIDProcess)
+	V.Local.sContents.Redim(0, 0)
+	F.Intrinsic.Control.If(V.Local.sCurrentPIDProcess.Long, >, 0)
+		'check if PID is actually running
+		F.Intrinsic.Task.PIDRunning(V.Local.sCurrentPIDProcess.Long, V.Local.bPIDRunning)
+		F.Intrinsic.Control.If(V.Local.bPIDRunning)
+			'the program is running
+			V.Local.bRunning.Set(True)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.If(V.Local.bRunning)
+	'if it's already running, end here
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.Else
+	'delete the file if it exists
+	F.Intrinsic.Control.If(V.Local.bExists)
+		F.Intrinsic.File.DeleteFile(V.Local.sFile)
+	F.Intrinsic.Control.EndIf
+	
+	'create lock file contents
+	F.Intrinsic.String.Build("PID: {0}{1}Launch Time: {2}{1}GSS User: {3}{1}Terminal: {4}{1}Windows User: {5}{1}Machine: {6}{1}Hook: {7}{1}Caller: {8}{1}Script: {9}{1}Company Code: {10}", V.Ambient.PID, V.Ambient.NewLine, V.Ambient.Now, V.Caller.User, V.Caller.Terminal, V.System.UserName, V.System.ComputerName, V.Caller.Hook, V.Caller.Caller, V.Caller.ScriptFile, V.Caller.CompanyCode, V.Local.sContents)
+	
+	'create a new lock file
+	F.Intrinsic.String.Build("{0}\Custom\{1}\{2}\IS_RUNNING", V.Caller.GlobalDir, V.Local.sProject, V.Caller.CompanyCode, V.Local.sDir)
+	F.Intrinsic.Control.CallSub(CheckDirectories, "Directories", V.Local.sDir)
+	F.Intrinsic.String.Build("{0}\{1}_Running.dat", V.Local.sDir, V.Local.sTask, V.Local.sFile)
+	F.Intrinsic.File.String2File(V.Local.sFile, V.Local.sContents)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ScriptPIDCheck.End
+
+Program.Sub.ScriptPIDClear.Start
+'delete the is running file, so the next time the program runs it knows it isn't currently running
+'Pass folder to store in 	- PROJECT
+'filename  base				- TASK
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String)
+
+V.Local.bExists.Declare(Boolean)
+V.Local.sFile.Declare(String)
+V.Local.sProject.Declare(String)
+V.Local.sTask.Declare(String)
+
+V.Local.sProject.Set(V.Args.Project)
+V.Local.sTask.Set(V.Args.Task)
+
+F.Intrinsic.String.Build("{0}\Custom\{1}\{2}\IS_RUNNING\{3}_Running.dat", V.Caller.GlobalDir, V.Local.sProject, V.Caller.CompanyCode, V.Local.sTask, V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile, V.Local.bExists)
+
+F.Intrinsic.Control.If(V.Local.bExists)
+	F.Intrinsic.File.DeleteFile(V.Local.sFile)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ScriptPIDClear.End
+
+Program.Sub.CheckDirectories.Start
+'check if the given import directories exist
+'create them if they don't
+'pass directories delimited with *!*
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String)
+
+V.Local.sDirectories.Declare(String)
+V.Local.sPath.Declare(String)
+V.Local.bExists.Declare(Boolean)
+V.Local.iCounter.Declare(Long)
+
+V.Local.sDirectories.Set(V.Args.Directories)
+F.Intrinsic.String.Split(V.Local.sDirectories, "*!*", V.Local.sDirectories)
+
+F.Intrinsic.Control.For(V.Local.iCounter, 0, V.Local.sDirectories.UBound, 1)
+	V.Local.sPath.Set(V.Local.sDirectories(V.Local.iCounter))
+	F.Intrinsic.File.DirExists(V.Local.sPath, V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		F.Intrinsic.File.CreateDir(V.Local.sPath)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCounter)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.CheckDirectories.End
+
+Program.Sub.Comments.Start
+${$0$}$GCG_4258_SN_Task_Sched_Roberts.g2u$}$DH1$}$10/27/2016 4:43:33 PM$}$False
+${$3$}$0$}$$}$-1$}$-1$}$$}$1/1/1900$}$SN90 transaction loads GSS Inventory into Sigma Nest
+Program.Sub.Comments.End
