@@ -1,0 +1,401 @@
+Program.Sub.Preflight.Start
+Variable.Global.sSNServer.Declare(String)
+Variable.Global.sSNDatabase.Declare(String)
+Variable.Global.sSNUID.Declare(String)
+Variable.Global.sSNPWD.Declare(String)
+Variable.Global.sSNInput.Declare(String)
+v.Global.sLogFile.Declare(String)
+v.Global.sLog.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+'//************************************************************************************************************
+' This script is for reading feedback from Sigma Nest, for Labor Hours, Piece Counts, and
+' Material usage.  For Labor and Piece Counts, an employee ID should be created.  The file that
+' will be read will be a 36 field comma delimited file with fields:
+' JOBNUMBER, PROGRAMNUMBER, PARTNUMBER, QTYORDERED, QTYCompleted,
+' PartCuttingTimeOnePart_Hrs, NESTEDAREA_in_Ea_Part, NESTEDWEIGHT_Lbs, SHEETNAME,
+' PROGRAM_SCRAP_PERCENTAGE, MACHINE, SHT_LOCATION, SHT_HEATNUM, SHT_BinNum,
+' SHT_Mil, PRT_Data1, PRT_Data2, PRT_Data3, PRT_Data4, PRT_Data5, PRT_Data6, PRT_Data7,
+' PRT_Data8, PRT_Data9, PRT_Data10, PRT_Data11, PRT_Data12, PRT_Data13, PRT_Data14,
+' Sht_Total_Area, True_Part_Weight, MachineNumber, Sht_PrimeCode, UsedArea, TaskName, QtyNested
+'
+' The script can also be setup in the Task scheduler, to run unattended, but this version assumes
+' user interaction.  User control is recommended during testing, to be able to evaluate update results
+' as they occur.
+'************************************************************************************************************//
+V.Local.Export.Declare(String)
+V.Local.exists.Declare(Boolean)
+v.Local.bExist.Declare(Boolean)
+
+f.Intrinsic.String.Build("{0}\Custom\4258\Log\GCG_4258_SigmaNest_To_GSS_Roberts_Flex_Log.txt",v.Caller.GlobalDir,v.Global.sLogFile)
+'f.Intrinsic.String.Build("{0}\FlexGSSSNLOG.txt",v.Caller.FilesDir,v.Global.sLogFile)
+f.Intrinsic.File.Exists(v.Global.sLogFile,v.Local.bExist)
+f.Intrinsic.Control.If(v.Local.bExist,=,False)
+	f.Intrinsic.File.String2File(v.Global.sLogFile,"")
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("{0}: Starting SN to GSS",v.Ambient.now,v.Global.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+
+' find the file path
+F.Intrinsic.Control.CallSub(Filepath)
+
+' imported files will go into the V.Args.FILELOC\Processed Directory.  If not found, create it.
+f.Intrinsic.String.Build("{0}Processed",v.Args.FILELOC,v.Local.Export)
+F.Intrinsic.File.DirExists(V.Local.Export,V.Local.Exists)
+F.Intrinsic.Control.If(V.Local.exists,=,False)
+	F.Intrinsic.File.CreateDir(V.Local.Export)
+F.Intrinsic.Control.EndIf
+
+' run the process
+F.Intrinsic.Control.CallSub(Get_file,"FILELOC",V.Args.FILELOC)
+' end the script
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_To_GSS_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.String.Build("{0}: Error handler: {1} ",v.Ambient.now,v.Local.sError,v.Global.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+	F.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Get_File.Start
+F.Intrinsic.Control.SetErrorHandler("Get_File_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sSel.Declare(String)
+V.Local.sSNFilePath.Declare(String)
+V.Local.sSNFiles.Declare(String)
+V.Local.sFilename.Declare(String)
+V.Local.sFileList.Declare(String)
+V.Local.FileDetail.Declare(String)
+V.Local.items.Declare(String)
+V.Local.count.Declare(Long)
+V.Local.Lcount.Declare(Long)
+V.Local.wo.Declare(String)
+V.Local.Lines.Declare(String)
+V.Local.ExportName.Declare(String)
+V.Local.dHours.Declare(Date)
+V.Local.fHours.Declare(Float)
+V.Local.fQty.Declare(Float)
+V.Local.date.Declare(String)
+V.Local.sEmployee.Declare(String)
+V.Local.job.Declare(String)
+V.Local.suffix.Declare(String)
+V.Local.seq.Declare(String)
+V.Local.sWC.Declare(String)
+V.Local.sHours.Declare(String)
+V.Local.sClosed.Declare(String)
+V.Local.sDirect.Declare(String)
+V.Local.sTimeIn.Declare(String)
+V.Local.sTimeOut.Declare(String)
+V.Local.sRateType.Declare(String)
+V.Local.sGood.Declare(String)
+V.Local.sScrap.Declare(String)
+V.Local.sReason.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.sQty.Declare(String)
+V.Local.sLaborData.Declare(String)
+V.Local.sLaborFile.Declare(String)
+V.Local.sMaterialData.Declare(String)
+V.Local.sMaterialFile.Declare(String)
+V.Local.bFileExists.Declare(Boolean)
+V.Local.sMsg.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sLine.Declare(String)
+V.Local.sDate.Declare(String)
+V.Local.sTime.Declare(String)
+V.Local.sLineFileName.Declare(String)
+V.Local.sPrint.Declare(String)
+V.Local.sSched.Declare(String)
+V.Local.sSchedPath.Declare(String)
+V.Local.sMaterialSeq.Declare(String)
+V.Local.sRev.Declare(string)
+V.Local.sSheet.Declare(string)
+v.Local.sSerial.Declare(string)
+V.Local.sFiller.Declare(string)
+v.Local.sFiller2.Declare(string)
+V.Local.sScheduleNumber.Declare(string)
+V.Local.sIncrement.Declare(string)
+V.Local.sMJob.Declare(string)
+V.Local.sMSuffix.Declare(string)
+V.Local.sMSeq.Declare(string)
+V.Local.sJob.Declare(string)
+V.Local.sSuffix.Declare(string)
+V.Local.sSeq.Declare(string)
+V.Local.sWorkCenter.Declare(string)
+v.Local.sFullPart.Declare(String)
+v.Local.fComp.Declare(Float)
+V.Local.bDecimal.Declare(Boolean)
+V.Local.iIncrement.Declare
+V.Local.sOldSchedule.Declare(String)
+V.Local.iIncrementCounter.Declare(Long, 1)
+v.Local.sLineCheck.Declare
+
+' NOTE: all information will be on a delmited file.  This sub could be re-written to just reference the elements of the line.
+' I have put everything in it's own variable, to help with understanding what information is used.
+f.Intrinsic.String.Build("{0}: Reading File to Issue",v.Ambient.now,v.Global.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+
+Function.Odbc.Connection!Conx.OpenConnection(Variable.Ambient.pDSN,Variable.Ambient.PUser,Variable.Ambient.PPass)
+
+' Get list of all files in the directory.  If no files are found, exit program.
+' This script assumes that any file within the specifid directory is an SN feedback file
+' so any file found will be processed.
+F.Intrinsic.File.GetFileList(V.Args.FILELOC,V.Local.sFileList)
+F.Intrinsic.String.Split(V.Local.sFileList,":",V.Local.sSNFiles)
+F.Intrinsic.Control.If(V.Local.sSNFiles(0),=,"")
+	F.Intrinsic.Control.GoTo("EXIT")
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.UI.InvokeWaitDialog("Reading Records from Sigma Nest to create Flex Schedule")
+' for each file
+         
+' for each file
+F.Intrinsic.Control.For(V.Local.count,V.Local.sSNFiles.LBound,V.Local.sSNFiles.UBound,1)
+	' copy the original file to the export directory and delete the original to prevent overwriting
+
+	
+	f.Intrinsic.String.Build("{0}{1}",v.Args.FILELOC,v.Local.sSNFiles(v.Local.count),v.Local.sFilename)
+	f.Intrinsic.String.Build("{0}Processed\{1}",v.Args.FILELOC,v.Local.sSNFiles(v.Local.count),v.Local.ExportName)
+	F.Intrinsic.File.CopyFile(V.Local.sFilename,V.Local.ExportName)
+	F.Intrinsic.File.DeleteFile(V.Local.sFilename)
+	' read the file copy
+	F.Intrinsic.File.File2String(V.Local.ExportName,V.Local.FileDetail)
+	' split to each line
+	F.Intrinsic.String.Split(V.Local.FileDetail,V.Ambient.NewLine,V.Local.Lines)
+	' for each line; start at line 1 because first line(0) is the header record
+	v.Local.iIncrement.Set(0)
+'	f.ODBC.Connection!conx.GetID("V_JOB_CT_FLX_SCHD","SCHEDULE",TRUE,V.Local.sScheduleNumber)
+'	F.Intrinsic.String.Format(V.Local.sScheduleNumber,"000000",V.Local.sScheduleNumber)
+	F.Intrinsic.Control.For(V.Local.Lcount,0,V.Local.Lines.UBound,1)
+		' split out the different fields
+		
+		
+
+   		
+		v.Local.items.Redim(0,0)
+		F.Intrinsic.String.Split(V.Local.Lines(V.Local.Lcount),",",V.Local.items)
+		V.Local.items.RedimPreserve(0,2)
+		' if the job record is not blank (assuming blank line) then proceed
+		F.Intrinsic.Control.If(V.Local.items(0),<>,"")
+			V.Local.sScheduleNumber.Set(v.Local.items(1).trim)
+			F.Intrinsic.String.Format(V.Local.sScheduleNumber,"000000",V.Local.sScheduleNumber)
+			F.Intrinsic.String.Build("DELETE FROM JOB_CT_FLX_SCHD WHERE SCHEDULE LIKE '{0}' ", V.Local.sScheduleNumber, V.Local.sSQL)
+			F.ODBC.Connection!Conx.Execute(V.Local.sSQL)
+			F.Intrinsic.Math.Add(V.Local.iIncrement,1,V.Local.iIncrement)
+			F.Intrinsic.String.Format(V.Local.iIncrement,"000000",V.Local.sIncrement)
+			' workorder will be Job-Suffix:Seq; split to get each distinct value
+			v.Local.sSeq.RedimPreserve(0,0)
+			F.Intrinsic.String.Split(V.Local.items(0),":",V.Local.seq)
+			v.Local.sSeq.RedimPreserve(0,1)
+			' job
+			v.Local.wo.RedimPreserve(0,0)
+			F.Intrinsic.String.Split(V.Local.seq(0),"-",V.Local.wo)
+			v.Local.wo.RedimPreserve(0,1)
+			V.Local.job.Set(V.Local.wo(0))
+			F.Intrinsic.String.LPad(V.Local.job,"0",6,V.Local.job)
+			' suffix
+			V.Local.suffix.Set(V.Local.wo(1))
+			' seq
+			V.Local.seq.Set(V.Local.seq(1))
+			'Somehow 7 characters gets passed back some times. Lets make sure it's 6
+			F.Intrinsic.String.LPad(V.Local.seq,"0",6,V.Local.seq)
+		
+
+			' concat Material informaiton to a line
+			' This information till be written to a file named LMOPEN.txt, which will be sent to WIR100, to create the material issue to the job
+			' This is a comma delimited file, qith fields:
+			' Part, Rev, Loc, Qty, Lot, Bin, Heat, Serial, Job, Suffix, Seq
+			'we will check to see if any material has been issued on the job already, if there has then we will not issue
+			F.Intrinsic.String.Build("SELECT  TOP 1 SEQ From V_JOB_OPERATIONS Where Job = '{0}' And SUFFIX = '{1}' And LMO = 'M' AND SEQ < '{2}' ORDER BY SEQ DESC ",V.Local.job,V.Local.suffix,v.Local.seq,V.Local.sMaterialSeq) 
+			F.ODBC.Connection!Conx.ExecuteAndReturn(V.Local.sMaterialSeq, V.Local.sMaterialSeq)
+			F.Intrinsic.String.Replace(V.Local.sMaterialSeq, "*!*","" ,V.Local.sMaterialSeq)
+			F.Intrinsic.String.Build("SELECT  TOP 1 Part From V_JOB_OPERATIONS Where Job = '{0}' And SUFFIX = '{1}' And LMO = 'M' AND SEQ < '{2}' ORDER BY SEQ DESC ",V.Local.job,V.Local.suffix,v.Local.seq,V.Local.sPart) 
+			F.ODBC.Connection!Conx.ExecuteAndReturn(V.Local.sPart, V.Local.sPart)
+			F.Intrinsic.String.Replace(V.Local.sPart, "*!*","" ,V.Local.sPart)
+			'search for the work center, part and sequence
+			F.Intrinsic.String.Build("SELECT TOP 1 PART AS WC FROM V_JOB_OPERATIONS WHERE JOB = '{0}' AND SUFFIX = '{1}' AND SEQ = '{2}' AND LMO = 'L' ORDER BY SEQ ASC",V.Local.sJob.Trim,V.Local.sSuffix.Trim,V.Local.sSeq.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSQL,V.Local.sWorkCenter)
+			F.Intrinsic.String.Replace(V.Local.sWorkCenter, "*!*","" ,V.Local.sWorkCenter)
+			
+
+			
+'---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			'flex schedule
+
+
+			'We need to pass Schedule Number, Increment, Material Job, Material Suffix, Material Seq, Job, Suffix, Seq, Filler, Work Center, Part = sheetname, Fillter2 new line 
+
+			V.Local.sFiller.Set("000000999999")
+			V.Local.sFiller2.Set("000000999999")
+			'padd all of the paramaters to fit into the file
+		
+			'F.Intrinsic.String.RPad("000001"," ",6,V.Local.sIncrement)
+			F.Intrinsic.String.RPad(V.Local.sIncrement," ",6,V.Local.sIncrement)
+			F.Intrinsic.String.RPad(V.Local.Job.Trim," ",6,V.Local.sMJob)
+			F.Intrinsic.String.RPad(V.Local.Suffix.Trim," ",3,V.Local.sMSuffix)
+			F.Intrinsic.String.RPad(V.Local.sMaterialSeq.Trim," ",11,V.Local.sMSeq)
+			
+			F.Intrinsic.String.RPad(V.Local.Job.trim," ",6,V.Local.sJob)
+			F.Intrinsic.String.RPad(V.Local.Suffix.Trim," ",3,V.Local.sSuffix)
+			F.Intrinsic.String.RPad(V.Local.Seq.Trim," ",6,V.Local.sSeq)
+			F.Intrinsic.String.RPad(V.Local.sFiller," ",37,V.Local.sFiller)
+			F.Intrinsic.String.RPad(V.Local.sWorkCenter," ",4,V.Local.sWorkCenter)
+			F.Intrinsic.String.RPad(v.Local.sPart," ",25,V.Local.sPart)
+			F.Intrinsic.String.RPad(V.Local.sFiller2," ",12,V.Local.sFiller2)
+			F.Intrinsic.String.Build("{0}{1}{14}{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}",V.Local.sSched,V.Local.sScheduleNumber,V.Local.sIncrement,V.Local.sMJob,V.Local.sMSuffix,V.Local.sMSeq,V.Local.sJob,V.Local.sSuffix,V.Local.sSeq,V.Local.sFiller,V.Local.sWorkCenter,V.Local.sPart,V.Local.sFiller2,V.Ambient.NewLine,"   ",v.Local.sSched)
+		f.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.Local.Lcount, =, V.Local.Lines.UBound)
+			
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.Lcount)
+	'and create a text file named SCHED.TXT in the Files directory. 
+
+	f.Intrinsic.String.Replace(v.Local.sSched,v.Ambient.NewLine," ",v.Local.sLineCheck)
+	f.Intrinsic.control.If(v.Local.sLineCheck.Trim,<>,"")
+		F.Intrinsic.String.Build("{0}\SCHED.TXT",V.Caller.FilesDir,V.Local.sSchedPath)
+		F.Intrinsic.File.String2File(V.Local.sSchedPath,V.Local.sSched)
+		f.Intrinsic.String.Build("{0}: Creating Flex Schedule",v.Ambient.now,v.Global.sLog)
+		f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+		Function.Global.General.CallWrapperSync(6000,"NS!*!50")
+		'2021-03-24, Trey S, Removing For Adam Gracyalny so these wouldn't pop up on the server
+		'F.Intrinsic.String.Build("000000!*!999999!*!{0}!*!000!*!{0}!*!000!*!Y!*!Y", V.Local.sScheduleNumber, V.Local.sPrint)
+		'Function.Global.General.CallWrapperSync(900300, V.Local.sPrint)
+	f.Intrinsic.Control.EndIf
+	v.Local.sSched.Set("")
+	' call callwrapper 6000 
+	
+	
+'------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+F.Intrinsic.Control.Next(V.Local.count)
+
+F.Intrinsic.UI.CloseWaitDialog
+F.Intrinsic.Control.Label("EXIT")
+F.Intrinsic.Control.CallSub(unload)
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Get_File_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_To_GSS_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.String.Build("{0}: Error handler: {1} ",v.Ambient.now,v.Local.sError,v.Global.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+	F.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Get_File.End
+
+Program.Sub.FilePath.Start
+F.Intrinsic.Control.SetErrorHandler("FilePath_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sSel.Declare(String)
+V.Local.sRet.Declare(String)
+V.Local.sHold.Declare(String)
+V.Local.sVal.Declare(String)
+V.Local.bRet.Declare(Boolean)
+V.Local.sFile.Declare(String)
+V.Local.iFor.Declare(Long)
+V.Local.sEmployee.Declare(String)
+
+' see if the credential file is found
+F.Intrinsic.String.Build("{0}\SNLIC.dat",V.Caller.FilesDir,V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+
+' if the file is found, look for the COMPLETE line
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+f.Intrinsic.String.Build("{0}: SNLIC.dat Exists",v.Ambient.now,v.Global.sLog)
+f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+	F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sRet)
+	F.Intrinsic.String.Split(V.Local.sRet,V.Ambient.NewLine,V.Local.sRet)
+	F.Intrinsic.Control.For(V.Local.iFor,V.Local.sRet.LBound,V.Local.sRet.UBound,1)
+		F.Intrinsic.String.Split(V.Local.sRet(v.Local.iFor),"::",V.Local.sHold)
+		V.Local.sHold.RedimPreserve(0,1)
+		F.Intrinsic.Control.SelectCase(V.Local.sHold(0))
+			' for SN -> GS
+			F.Intrinsic.Control.Case("FLEX")
+				V.Local.sVal.Set(V.Local.sHold(1))
+				F.Intrinsic.String.Right(V.Local.sVal,1,V.Local.sRet)
+				F.Intrinsic.Control.If(V.Local.sRet,<>,"\")
+					F.Intrinsic.String.Build("{0}\",V.Local.sVal,V.Local.sVal)
+				F.Intrinsic.Control.EndIf
+			'for SN Input
+			f.Intrinsic.Control.Case("INPUT")
+				V.Global.sSNInput.Set(v.Local.sHold(1).Trim)
+		F.Intrinsic.Control.EndSelect
+	F.Intrinsic.Control.Next(V.Local.iFor)
+F.Intrinsic.Control.EndIf
+
+' if the path is found,send it back.  otherwise end the script
+F.Intrinsic.Control.If(V.Local.sVal,=,"")
+	F.Intrinsic.UI.Msgbox("INPUT file path not found.")
+	F.Intrinsic.Control.End
+
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Variable.AddRV("FILELOC",V.Local.sVal)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("FilePath_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_To_GSS_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.String.Build("{0}: Error handler: {1} ",v.Ambient.now,v.Local.sError,v.Global.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+	F.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.FilePath.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.SetErrorHandler("Unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!Conx.Close
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_SigmaNest_To_GSS_Roberts.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+'	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Debug.SetLA(v.Local.sError)
+	f.Intrinsic.String.Build("{0}: Error handler: {1} ",v.Ambient.now,v.Local.sError,v.Global.sLog)
+	f.Intrinsic.File.Append2FileNewLine(v.Global.sLogFile,v.Global.sLog)
+	F.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Unload.End
+
+Program.Sub.Comments.Start
+${$0$}$GCG_4258_SigmaNest_To_GSS_Roberts.g2u$}$DH1$}$10/27/2016 4:18:11 PM$}$False
+${$3$}$0$}$$}$-1$}$-1$}$$}$1/1/1900$}$SN90 transaction loads GSS Inventory into Sigma Nest
+Program.Sub.Comments.End
