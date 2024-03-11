@@ -1,0 +1,39 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+v.Local.bExist.Declare(Boolean)
+v.Local.sFileName.Declare(String)
+
+'On the stand alone issue and recept issue hook.
+'if passed variable 009000 exists then they are opening it up from the menu.
+'variable doesn't exist so they are opening up wir104 so we need to write the PID
+F.Intrinsic.Control.If(V.Caller.Hook,=,14590)
+	f.Intrinsic.Variable.PassedExists("009000",v.Local.bExist)
+	f.Intrinsic.Control.If(v.Local.bExist,=,False)
+		f.Intrinsic.String.Build("{0}\SNCWTask.txt",v.Caller.FilesDir,v.Local.sFileName)
+		f.Intrinsic.File.String2File(v.Local.sFileName,v.Caller.PID)
+	f.Intrinsic.Control.EndIf	
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4258_ISSUE_PID.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.Debug.SetLA(V.Local.sError)
+	F.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Main.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$SUPERVSR$}$3/29/2017 2:49:23 PM$}$True
+Program.Sub.Comments.End
